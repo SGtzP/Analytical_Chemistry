@@ -12,7 +12,7 @@ plt.rcParams['figure.dpi'] = 300
 plt.rcParams['savefig.dpi'] = 300
 
 # Dissociation Constants (can be adjusted for different acids)
-pka = [0.26, 1.52, 2.03, 2.48, 6.34, 10.65]  # Add or remove pKa values as needed. EDTA right now
+pka = [0.26, 1.52, 2.03, 2.48, 6.34, 10.65]  # Add or remove pKa values as needed. EDTA values are placed, right now.
 
 # Calculate ka values from pka
 ka = [10**(-p) for p in pka]
