@@ -1,0 +1,66 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Sep 29 17:16:26 2024
+
+@author: salvador
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+plt.rcParams['figure.dpi'] = 300
+plt.rcParams['savefig.dpi'] = 300
+
+# Dissociation Constants (can be adjusted for different acids)
+pka = [0.26, 1.52, 2.03, 2.48, 6.34, 10.65]  # Add or remove pKa values as needed. EDTA right now
+
+# Calculate ka values from pka
+ka = [10**(-p) for p in pka]
+
+# pH Scale Size/Resolution
+dpH = 0.01
+pH = np.arange(0, 14.01, dpH)
+H = 10**(-pH)
+
+# Dynamically calculate alphas and DenPol coefficients
+DenPol = [1]  # Initialize polynomial coefficients
+for i in range(1, len(ka) + 1):
+    prod = np.prod(ka[:i])  # Product of ka values up to the ith index
+    DenPol.append(prod)
+
+# Evaluate the polynomial at the values in H
+Den = np.polyval(DenPol, H)
+
+alphas = []
+for i in range(len(ka) + 1):
+    # Reverse the power of H such that the highest a corresponds to H^0 and the lowest to H^6
+    alphas.append((np.prod(ka[:i]) * (H**(len(ka) - i))) / Den)
+
+# First plot: Fraction diagram
+plt.figure()
+for i in range(len(alphas)):
+    plt.plot(pH, alphas[i], label=f"H$_{i}$A$^{{{len(alphas) - 1 - i}-}}$")
+
+plt.title('Fraction Diagram')
+plt.xlabel('pH')
+plt.ylabel('Total Acid Fraction')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Second plot with vertical pKa lines
+plt.figure()
+for i in range(len(alphas)):
+    plt.plot(pH, alphas[i], label=f"H$_{i}$A$^{{{len(alphas) - 1 - i}-}}$")
+
+for i, pka_value in enumerate(pka):
+    plt.axvline(x=pka_value, linestyle='-', label=None)
+    plt.text(pka_value, plt.ylim()[1]*0.95, f'pKa$_{i+1}$', ha='right')
+
+plt.title('Fraction Diagram with pKa Lines')
+plt.xlabel('pH')
+plt.ylabel('Total Acid Fraction')
+plt.legend()
+plt.grid(True)
+plt.show()
+
