@@ -1,0 +1,107 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Jul 28 17:36:53 2025
+
+@author: sgtzp
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import brentq
+
+plt.rcParams['figure.dpi'] = 300
+plt.rcParams['savefig.dpi'] = 300
+
+
+# --- Parameters ---
+dpH = 0.01
+pH = np.arange(0, 14.0 + dpH, dpH)
+pOH = 14 - pH
+OH = 10**(-pOH)
+
+metal_name = "Cu"
+metal_charge = 2
+M_total = 0.01  # Total [Cu]
+
+# Polynuclear species: (i = metal atoms, j = hydroxide ions)
+polynuclear_pairs = [
+    (1, 1), (1, 2), (1, 3), (1, 4),     # Mononuclear
+    (2, 1), (2, 2),                     # Dinuclear
+    (3, 4),                             # Trinuclear
+]
+
+logKf_values = [6.04, 11.76, 15.3, 16.4, 7.3, 17.65, 35.0]
+Kf_values = [10**val for val in logKf_values]
+
+# --- Mass balance function ---
+def mass_balance(Cu_free, OH_conc):
+    total = Cu_free
+    for (i, j), Kf in zip(polynuclear_pairs, Kf_values):
+        total += i * Kf * (Cu_free**i) * (OH_conc**j)
+    return total - M_total
+
+# --- Root finding with brentq and sign check ---
+def find_root(oh):
+    a, b = 1e-20, M_total
+    fa = mass_balance(a, oh)
+    fb = mass_balance(b, oh)
+    if fa * fb > 0:
+        # No sign change - no root bracketed, return nan
+        return np.nan
+    else:
+        return brentq(mass_balance, a, b, args=(oh,), maxiter=1000)
+
+# --- Solve for free Cu²⁺ ---
+Cu_free_array = np.array([find_root(oh) for oh in OH])
+
+# Clean-up: avoid NaNs or tiny/negative numbers
+Cu_free_array = np.nan_to_num(Cu_free_array, nan=1e-20)
+Cu_free_array = np.clip(Cu_free_array, 1e-20, None)
+
+# --- Denominator = sum of all species ---
+Den_metal = Cu_free_array.copy()  # Start with free Cu
+for (i, j), Kf in zip(polynuclear_pairs, Kf_values):
+    Den_metal += i * Kf * (Cu_free_array**i) * (OH**j)  # Add only complexes here
+
+# --- Alpha fractions (fractions of total Cu) ---
+alphas_metal = []
+
+# Free Cu²⁺ (M^2+)
+alphas_metal.append(Cu_free_array / Den_metal)
+
+# Complexes
+for (i, j), Kf in zip(polynuclear_pairs, Kf_values):
+    numerator = i * Kf * (Cu_free_array**i) * (OH**j)
+    alpha = numerator / Den_metal
+    alphas_metal.append(alpha)
+
+# --- Labels ---
+labels_metal = [f"{metal_name}$^{{{metal_charge}+}}$"]
+for (i, j) in polynuclear_pairs:
+    charge = metal_charge * i - j
+    if i > 1:
+        base = f"({metal_name})$_{{{i}}}$"
+    else:
+        base = metal_name
+    species = f"{base}(OH)$_{{{j}}}$"
+    if charge == 0:
+        charge_str = ""
+    elif abs(charge) == 1:
+        charge_str = "$^{+}$" if charge > 0 else "$^{-}$"
+    else:
+        charge_str = f"$^{{{charge:+}}}$"
+    labels_metal.append(species + charge_str)
+
+# --- Plot ---
+plt.figure(figsize=(10, 6))
+for frac, lbl in zip(alphas_metal, labels_metal):
+    plt.plot(pH, frac, label=lbl, lw=1.8)
+
+plt.title(f'Fraction Diagram: Polynuclear {metal_name} Hydroxide System')
+plt.xlabel('pH')
+plt.ylabel('Fraction of total Cu')
+plt.ylim(0, 1.05)
+plt.legend(loc='lower left', fontsize=14)
+plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+plt.tight_layout()
+plt.show()
