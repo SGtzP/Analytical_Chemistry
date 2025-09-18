@@ -1,0 +1,107 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Jul 28 17:36:53 2025
+
+@author: sgtzp
+"""
+# Multiple Alphas
+import numpy as np
+import matplotlib.pyplot as plt
+
+plt.rcParams['figure.dpi'] = 300
+plt.rcParams['savefig.dpi'] = 300
+
+# ---------- pH / pOH Scale ----------
+dpH = 0.01
+pH = np.arange(0, 14.0, dpH)
+H = 10**(-pH)
+pOH = 14 - pH
+OH = 10**(-pOH)
+
+# ---------- USER INPUT: Metal Hydroxide System ----------
+metal_name = "Cu"                 # e.g., Fe, Cu, Al
+metal_charge = 2                # Initial metal charge (e.g. Fe²⁺ → 2)
+logB_metal = [6.04, 11.76, 15.3, 16.4]  # Cumulative base constants (logβ)
+
+kB_metal = [10**val for val in logB_metal]
+DenPol_metal = [1] + kB_metal
+Den_metal = np.polyval(DenPol_metal[::-1], OH)
+
+alphas_metal = []
+for i in range(len(kB_metal) + 1):
+    if i == 0:
+        alphas_metal.append(1 / Den_metal)
+    else:
+        alphas_metal.append((kB_metal[i - 1] * OH**i) / Den_metal)
+
+# ---------- AUTO LABELS for Metal System ----------
+labels_metal = []
+for i in range(len(alphas_metal)):
+    hydroxide_count = i
+    species = f"{metal_name}" if i == 0 else f"{metal_name}(OH)$_{{{hydroxide_count}}}$"
+    total_charge = metal_charge - hydroxide_count
+    if total_charge == 0:
+        charge_str = ""
+    elif total_charge == 1:
+        charge_str = "$^{+}$"
+    elif total_charge == -1:
+        charge_str = "$^{-}$"
+    else:
+        charge_str = f"$^{{{total_charge:+}}}$"
+    labels_metal.append(species + charge_str)
+
+# ---------- USER INPUT: Ligand Protonation System ----------
+ligand_name = "Y"               # e.g., Y for EDTA, Z for DTPA
+ligand_charge = -4             # Final charge when fully deprotonated (e.g. EDTA → -6)
+logB_ligand = [10.34, 16.58, 19.33, 21.4]  # Cumulative protonation constants
+
+kB_ligand = [10**val for val in logB_ligand]
+DenPol_ligand = [1] + kB_ligand
+Den_ligand = np.polyval(DenPol_ligand[::-1], H)
+
+alphas_ligand = []
+for i in range(len(kB_ligand) + 1):
+    if i == 0:
+        alphas_ligand.append(1 / Den_ligand)
+    else:
+        alphas_ligand.append((kB_ligand[i - 1] * H**i) / Den_ligand)
+
+# ---------- AUTO LABELS for Ligand System ----------
+labels_ligand = []
+N = len(alphas_ligand) - 1
+for i in range(len(alphas_ligand)):
+    proton_count = N - i
+    charge = ligand_charge + proton_count
+    H_part = fr'H$_{{{proton_count}}}$' if proton_count > 0 else ''
+    if charge == 0:
+        charge_str = ''
+    elif charge == 1:
+        charge_str = '$^{+}$'
+    elif charge == -1:
+        charge_str = '$^{-}$'
+    else:
+        charge_str = f'$^{{{charge:+}}}$'
+    labels_ligand.append(H_part + ligand_name + charge_str)
+
+# ---------- Plot Both Systems ----------
+fig, axs = plt.subplots(2, 1, figsize=(8, 10), sharex=True)
+
+# Metal Hydroxide
+for i in range(len(alphas_metal)):
+    axs[0].plot(pH, alphas_metal[i], label=labels_metal[i])
+axs[0].set_title(f'Fraction Diagram: {metal_name}$^{{{metal_charge}+}}$ Hydroxide System')
+axs[0].set_ylabel('Fraction')
+axs[0].legend(fontsize=14)
+axs[0].grid(True)
+
+# Ligand Protonation
+for i in range(len(alphas_ligand)):
+    axs[1].plot(pH, alphas_ligand[i], label=labels_ligand[i])
+axs[1].set_title(f'Fraction Diagram: {ligand_name} Protonation System')
+axs[1].set_xlabel('pH')
+axs[1].set_ylabel('Fraction')
+axs[1].legend(fontsize=14)
+axs[1].grid(True)
+
+plt.tight_layout()
+plt.show()
