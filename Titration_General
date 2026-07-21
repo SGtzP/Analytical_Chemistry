@@ -1,0 +1,193 @@
+"""
+Created on Thu 16 22:04:02 2026
+
+@author: sgtzp
+"""
+import numpy as np
+import matplotlib.pyplot as plt
+
+plt.rcParams['figure.dpi'] = 300      # display DPI
+plt.rcParams['savefig.dpi'] = 300     # saved image DPI
+# ------------------------
+# Parameters
+# ------------------------
+n_protons = 1                   # Number of protons (change this for any polyprotic acid)
+pKa = [4.72]             # List of pKa's, length = n_protons
+C0 = 0.1                        # Acid concentration (mol/L)
+COH = 0.2                       # Base concentration (mol/L)
+V0 = 0.03                       # Initial acid volume (L)
+Kw = 1e-14
+
+# Convert pKa to Ka
+K = [10**(-p) for p in pKa]
+
+# ------------------------
+# Fraction function
+# ------------------------
+def alpha_i(H):
+    """
+    Compute fractions alpha_0 ... alpha_n for n-protic acid.
+    H: proton concentration [H+]
+    Returns a list [alpha_0, ..., alpha_n]
+    """
+    n = len(K)
+    numerator_list = []
+    for i in range(n+1):
+        prod_K = np.prod(K[:i]) if i > 0 else 1
+        numerator = prod_K * H**(n-i)
+        numerator_list.append(numerator)
+    denom = sum(numerator_list)
+    alpha = [num/denom for num in numerator_list]
+    return alpha
+
+# ------------------------
+# Volume from pH
+# ------------------------
+def volume_from_pH(pH):
+    H = 10**(-pH)
+    OH = Kw / H
+    alpha = alpha_i(H)
+    
+    # Sum i * alpha_i for i = 1..n
+    sum_charges = sum(i * alpha[i] for i in range(1, len(alpha)))
+    
+    numerator = V0 * (OH - H + C0 * sum_charges)
+    denominator = COH + H - OH
+    
+    return numerator / denominator  # liters
+
+# ------------------------
+# Generate titration curve
+# ------------------------
+pH_values = np.linspace(0, 12.5, 1000)
+v_values = np.array([volume_from_pH(pH) for pH in pH_values])
+
+# ------------------------
+# Plot
+# ------------------------
+plt.figure(figsize=(9,6))
+plt.plot(v_values*1000, pH_values, 'b', linewidth=2.5)
+plt.xlabel("Added NaOH Volume (mL)")
+plt.ylabel("pH")
+plt.title(f"{n_protons}-Protic Acid Titration Curve ($C_0=C_{{OH}}=${C0} M, $V_0=${V0*1000:.0f} mL)")
+plt.grid(True)
+plt.xlim(0, np.nanmax(v_values*1000))
+plt.ylim(2, 13)
+plt.show()
+
+
+
+# =============================================================================
+# Highlighting Points
+# =============================================================================
+
+
+# Volumes to highlight (mL)
+marker_vols = np.array([0, 7, 10, 15])
+
+# Interpolate pH values at those volumes
+marker_pHs = np.interp(marker_vols, v_values*1000, pH_values)
+
+plt.figure(figsize=(9,6))
+plt.plot(v_values*1000, pH_values, 'b', label='Titration Curve')
+
+# Add highlighted points
+plt.scatter(marker_vols, marker_pHs,
+            color='red', s=80, zorder=5, label='Selected Points')
+
+# # Optional: label each point
+# for v, pH in zip(marker_vols, marker_pHs):
+#     plt.annotate(f"({v:.1f}, {pH:.2f})",
+#                  (v, pH),
+#                   xytext=(20, 12),
+#                   fontsize=14,  # Increase font size here
+#                  textcoords='offset points')
+    
+for v, pH in zip(marker_vols, marker_pHs):
+    plt.annotate(f"{v:.1f} mL",
+                 (v, pH),
+                 xytext=(15, 12),
+                 fontsize=14,  # Increase font size here
+                 textcoords='offset points')
+
+plt.xlabel("Added NaOH Volume (mL)")
+plt.ylabel("pH")
+plt.title(
+    f"{n_protons}-Protic Acid Titration Curve "
+    f"($C_0=C_{{OH}}={C0}$ M, $V_0={V0*1000:.0f}$ mL)"
+)
+plt.grid(True)
+plt.xlim(0, np.nanmax(v_values*1000))
+plt.ylim(0, 14)
+plt.legend()
+plt.show()
+# =============================================================================
+# Weak Acid Depletion / Conjugate Base Formation + pH
+# =============================================================================
+
+depletions = [2, 4, 6, 8, 10, 20, 30, 50]
+
+pKa_value = pKa[0]
+
+fig, axes = plt.subplots(2, 4, figsize=(15, 8))
+axes = axes.flatten()
+
+for ax, dep in zip(axes, depletions):
+
+    f = dep / 100
+
+    # Correct stoichiometric conversion
+    HA_conc = C0 * (1 - f)
+    A_conc  = C0 + C0 * f
+
+    # Henderson–Hasselbalch pH
+    pH = pKa_value + np.log10(A_conc / HA_conc)
+
+    # Single bar plot (NO duplication)
+    bars = ax.bar(
+        ['HA', 'A⁻'],
+        [HA_conc, A_conc],
+        color=['crimson', 'royalblue'],
+        alpha=0.85,
+        edgecolor='black'
+    )
+
+    ax.set_ylim(0, C0 * 1.6)
+    ax.set_title(f'{dep}% Depletion')
+
+    ax.set_ylabel('Concentration (M)')
+
+    # Value labels on bars
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width()/2,
+            height + C0*0.02,
+            f'{height:.3f}',
+            ha='center',
+            fontsize=12
+        )
+
+    # Percentage labels inside bars
+    ax.text(0, HA_conc/2, f'{100-dep:.0f}%', ha='center', va='center', fontweight='bold')
+    ax.text(1, A_conc/2, f'{dep:.0f}%', ha='center', va='center', fontweight='bold')
+
+    # pH annotation (KEY ADDITION)
+    ax.text(
+        0.5, 0.92,
+        f'pH = {pH:.2f}',
+        transform=ax.transAxes,
+        ha='center',
+        fontsize=14,
+        fontweight='bold',
+        bbox=dict(facecolor='white', alpha=0.7, edgecolor='none')
+    )
+
+plt.suptitle(
+    f'Weak Acid → Conjugate Base Formation with pH\n'
+    f'C0 = {C0:.3f} M, pKa = {pKa_value}',
+    fontsize=15
+)
+
+plt.tight_layout()
+plt.show()
